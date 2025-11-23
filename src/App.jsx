@@ -41,7 +41,7 @@ const App = () => (
                   <Route path="/attendance" element={<Attendance />} />
                   <Route path="/results" element={<Results />} />
                   <Route path="/announcements" element={<Announcements />} />
-                  <Route path="*" element={<NotFound />} />
+                  <Route path="*" element={<div className="text-center p-6">Page not found</div>} />
                 </Routes>
               </main>
             </div>
