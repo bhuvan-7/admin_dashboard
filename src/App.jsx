@@ -13,7 +13,6 @@ import Subjects from "./pages/Subjects";
 import Attendance from "./pages/Attendance";
 import Results from "./pages/Results";
 import Announcements from "./pages/Announcements";
-import NotFound from "./pages/NotFound";
 import Sidebar from "./components/layout/Sidebar";
 import Topbar from "./components/layout/Topbar";
 
