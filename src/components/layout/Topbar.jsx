@@ -1,5 +1,5 @@
 import { Bell, Search, ChevronDown, User, Settings, LogOut } from "lucide-react";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,8 +15,21 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-const Topbar = () => {
+const Topbar = ({ onLogout, userRole }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const roleLabels = {
+    admin: "Admin",
+    student: "Student",
+    teacher: "Teacher",
+    parent: "Parent",
+  };
+
+  const handleLogout = () => {
+    if (onLogout) onLogout();
+    navigate("/login");
+  };
   const segments = location.pathname.split("/").filter(Boolean);
 
   const labelMap = {
@@ -170,15 +183,18 @@ const Topbar = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 h-9 px-3 rounded-lg hover:bg-muted">
                 <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm">
-                  A
+                  {(roleLabels[userRole] || "A").charAt(0).toUpperCase()}
                 </div>
+                <span className="text-sm font-medium text-foreground hidden sm:inline">
+                  {roleLabels[userRole] || "User"}
+                </span>
                 <ChevronDown className="w-3 h-3 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <div className="px-2 py-1.5 text-sm font-medium">
-                <p className="text-foreground">Admin User</p>
-                <p className="text-xs text-muted-foreground">admin@lms.com</p>
+                <p className="text-foreground">{roleLabels[userRole] || "User"}</p>
+                <p className="text-xs text-muted-foreground">{userRole}@lms.com</p>
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
@@ -190,7 +206,7 @@ const Topbar = () => {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem className="text-destructive cursor-pointer" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </DropdownMenuItem>
