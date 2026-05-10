@@ -2,6 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, ShieldCheck, GraduationCap, BookOpen, Users, ArrowLeft, LogIn } from "lucide-react";
 
+const getHomeRouteForRole = (roleId) => {
+  if (roleId === "student") return "/student";
+  return "/";
+};
+
 const roles = [
   {
     id: "admin",
@@ -101,7 +106,7 @@ const Login = ({ onLogin }) => {
     const creds = validCredentials[selectedRole.id];
     if (username === creds.username && password === creds.password) {
       onLogin(selectedRole.id);
-      navigate("/");
+      navigate(getHomeRouteForRole(selectedRole.id));
     } else {
       setError("Invalid username or password. Please try again.");
     }

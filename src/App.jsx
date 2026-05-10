@@ -17,13 +17,21 @@ import Results from "./pages/Results";
 import Announcements from "./pages/Announcements";
 import Sidebar from "./components/layout/Sidebar";
 import Topbar from "./components/layout/Topbar";
+import StudentSidebar from "./components/layout/StudentSidebar";
+import StudentDashboard from "./pages/student/StudentDashboard";
+import StudentSubjects from "./pages/student/StudentSubjects";
+import StudentExams from "./pages/student/StudentExams";
+import StudentAssignments from "./pages/student/StudentAssignments";
+import StudentAttendance from "./pages/student/StudentAttendance";
+import StudentAnnouncements from "./pages/student/StudentAnnouncements";
+import StudentResults from "./pages/student/StudentResults";
 
 const queryClient = new QueryClient();
 
-const ProtectedLayout = ({ children, onLogout, userRole }) => (
+const ProtectedLayout = ({ children, onLogout, userRole, SidebarComponent = Sidebar }) => (
   <div className="min-h-screen bg-sidebar p-3">
     <div className="flex min-h-[calc(100vh-1.5rem)] bg-background rounded-xl overflow-hidden shadow-2xl">
-      <Sidebar />
+      <SidebarComponent userRole={userRole} />
       <div className="flex-1 flex flex-col relative">
         <Topbar onLogout={onLogout} userRole={userRole} />
         <main className="flex-1 p-6 overflow-y-auto">{children}</main>
@@ -31,6 +39,11 @@ const ProtectedLayout = ({ children, onLogout, userRole }) => (
     </div>
   </div>
 );
+
+const getHomeRouteForRole = (roleId) => {
+  if (roleId === "student") return "/student";
+  return "/";
+};
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -64,7 +77,7 @@ const App = () => {
               path="/login"
               element={
                 isAuthenticated ? (
-                  <Navigate to="/" replace />
+                  <Navigate to={getHomeRouteForRole(userRole)} replace />
                 ) : (
                   <Login onLogin={handleLogin} />
                 )
@@ -74,94 +87,187 @@ const App = () => {
             {/* Protected Routes */}
             {isAuthenticated ? (
               <>
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <Dashboard />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="/requests"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <Requests />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="/add-teacher"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <AddTeacher />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="/teachers"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <Teachers />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="/students"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <Students />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="/parents"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <Parents />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="/subjects"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <Subjects />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="/attendance"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <Attendance />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="/results"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <Results />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="/announcements"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <Announcements />
-                    </ProtectedLayout>
-                  }
-                />
-                <Route
-                  path="*"
-                  element={
-                    <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
-                      <div className="text-center p-6">Page not found</div>
-                    </ProtectedLayout>
-                  }
-                />
+                {userRole === "student" ? (
+                  <>
+                    <Route path="/" element={<Navigate to="/student" replace />} />
+                    <Route
+                      path="/student"
+                      element={
+                        <ProtectedLayout
+                          onLogout={handleLogout}
+                          userRole={userRole}
+                          SidebarComponent={StudentSidebar}
+                        >
+                          <StudentDashboard />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/student/subjects"
+                      element={
+                        <ProtectedLayout
+                          onLogout={handleLogout}
+                          userRole={userRole}
+                          SidebarComponent={StudentSidebar}
+                        >
+                          <StudentSubjects />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/student/exams"
+                      element={
+                        <ProtectedLayout
+                          onLogout={handleLogout}
+                          userRole={userRole}
+                          SidebarComponent={StudentSidebar}
+                        >
+                          <StudentExams />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/student/assignments"
+                      element={
+                        <ProtectedLayout
+                          onLogout={handleLogout}
+                          userRole={userRole}
+                          SidebarComponent={StudentSidebar}
+                        >
+                          <StudentAssignments />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/student/attendance"
+                      element={
+                        <ProtectedLayout
+                          onLogout={handleLogout}
+                          userRole={userRole}
+                          SidebarComponent={StudentSidebar}
+                        >
+                          <StudentAttendance />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/student/announcements"
+                      element={
+                        <ProtectedLayout
+                          onLogout={handleLogout}
+                          userRole={userRole}
+                          SidebarComponent={StudentSidebar}
+                        >
+                          <StudentAnnouncements />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/student/results"
+                      element={
+                        <ProtectedLayout
+                          onLogout={handleLogout}
+                          userRole={userRole}
+                          SidebarComponent={StudentSidebar}
+                        >
+                          <StudentResults />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route path="*" element={<Navigate to="/student" replace />} />
+                  </>
+                ) : (
+                  <>
+                    <Route
+                      path="/"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <Dashboard />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/requests"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <Requests />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/add-teacher"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <AddTeacher />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/teachers"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <Teachers />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/students"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <Students />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/parents"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <Parents />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/subjects"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <Subjects />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/attendance"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <Attendance />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/results"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <Results />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="/announcements"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <Announcements />
+                        </ProtectedLayout>
+                      }
+                    />
+                    <Route
+                      path="*"
+                      element={
+                        <ProtectedLayout onLogout={handleLogout} userRole={userRole}>
+                          <div className="text-center p-6">Page not found</div>
+                        </ProtectedLayout>
+                      }
+                    />
+                  </>
+                )}
               </>
             ) : (
               <Route path="*" element={<Navigate to="/login" replace />} />

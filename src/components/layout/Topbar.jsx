@@ -39,6 +39,13 @@ const Topbar = ({ onLogout, userRole }) => {
     students: "Students",
     parents: "Parents",
     "add-teacher": "Add Teacher",
+    student: "Student Dashboard",
+    subjects: "Subjects",
+    exams: "Exams",
+    assignments: "Assignments",
+    attendance: "Attendance",
+    announcements: "Announcements",
+    results: "Results",
   };
 
   const breadcrumbs = segments.length
