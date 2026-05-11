@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -25,6 +25,8 @@ import StudentAssignments from "./pages/student/StudentAssignments";
 import StudentAttendance from "./pages/student/StudentAttendance";
 import StudentAnnouncements from "./pages/student/StudentAnnouncements";
 import StudentResults from "./pages/student/StudentResults";
+import api from "./lib/axios";
+import { createAuthedWebSocket } from "./lib/ws";
 
 const queryClient = new QueryClient();
 
@@ -46,24 +48,65 @@ const getHomeRouteForRole = (roleId) => {
 };
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem("lms_user_role");
-  });
-  const [userRole, setUserRole] = useState(() => {
-    return localStorage.getItem("lms_user_role") || null;
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem("token"));
+  const [userRole, setUserRole] = useState(() => localStorage.getItem("lms_user_role") || null);
 
   const handleLogin = (role) => {
-    localStorage.setItem("lms_user_role", role);
     setIsAuthenticated(true);
     setUserRole(role);
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("lms_user_role");
     setIsAuthenticated(false);
     setUserRole(null);
   };
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const res = await api.get("/auth/me");
+        localStorage.setItem("lms_user_role", res.data.role);
+        setUserRole(res.data.role);
+        setIsAuthenticated(true);
+      } catch {
+        localStorage.removeItem("token");
+        localStorage.removeItem("lms_user_role");
+        setIsAuthenticated(false);
+        setUserRole(null);
+      }
+    };
+    bootstrap();
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const ws = createAuthedWebSocket();
+    if (!ws) return;
+
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        // Placeholder: later we’ll invalidate React Query caches by event.
+        // For now, keep connection alive and visible in devtools.
+        // eslint-disable-next-line no-console
+        console.debug("realtime", msg);
+      } catch {
+        // ignore
+      }
+    };
+
+    return () => {
+      try {
+        ws.close();
+      } catch {
+        // ignore
+      }
+    };
+  }, [isAuthenticated]);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -8,6 +8,18 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    // Proxy to FastAPI so the browser talks same-origin (/api, /ws) and avoids CORS in dev.
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/ws": {
+        target: "http://127.0.0.1:8000",
+        ws: true,
+        changeOrigin: true,
+      },
+    },
   },
   plugins: [
     react(),

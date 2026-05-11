@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, ShieldCheck, GraduationCap, BookOpen, Users, ArrowLeft, LogIn } from "lucide-react";
+import api from "@/lib/axios";
 
 const getHomeRouteForRole = (roleId) => {
   if (roleId === "student") return "/student";
@@ -91,27 +92,42 @@ const Login = ({ onLogin }) => {
     }
 
     setIsLoading(true);
+    try {
+      const res = await api.post("/auth/login", { username, password });
+      localStorage.setItem("token", res.data.access_token);
 
-    // Simulate authentication delay
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-
-    // Demo credentials check (in production, replace with real API call)
-    const validCredentials = {
-      admin: { username: "admin", password: "admin123" },
-      student: { username: "student", password: "student123" },
-      teacher: { username: "teacher", password: "teacher123" },
-      parent: { username: "parent", password: "parent123" },
-    };
-
-    const creds = validCredentials[selectedRole.id];
-    if (username === creds.username && password === creds.password) {
-      onLogin(selectedRole.id);
-      navigate(getHomeRouteForRole(selectedRole.id));
-    } else {
-      setError("Invalid username or password. Please try again.");
+      const me = await api.get("/auth/me");
+      if (selectedRole?.id && me.data.role !== selectedRole.id) {
+        localStorage.removeItem("token");
+        setError(
+          `This account is for "${me.data.role}". Pick the ${me.data.role} role on the login screen, or use that role's username/password.`,
+        );
+        return;
+      }
+      localStorage.setItem("lms_user_role", me.data.role);
+      onLogin(me.data.role);
+      navigate(getHomeRouteForRole(me.data.role));
+    } catch (err) {
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d) => d?.msg || d).join(" ")
+            : null;
+      if (!err?.response) {
+        setError(
+          "Cannot reach the API. Start the backend on port 8000, then restart the dev server (npm run dev). Requests use the Vite proxy at /api → http://127.0.0.1:8000 unless you set VITE_API_BASE_URL.",
+        );
+      } else if (status === 401) {
+        setError(msg || "Invalid username or password. If you just set up the DB, run: py scripts\\seed.py (from the backend folder).");
+      } else {
+        setError(msg || `Login failed (${status}). Check the browser Network tab for details.`);
+      }
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   const activeRole = roles.find((r) => r.id === selectedRole?.id);
