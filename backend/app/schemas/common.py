@@ -19,6 +19,10 @@ class SubjectOut(BaseModel):
     notes: str | None = None
 
 
+class SubjectWithTeacherOut(SubjectOut):
+    teacher_name: str | None = None
+
+
 class TeacherOut(BaseModel):
     id: int
     user_id: int

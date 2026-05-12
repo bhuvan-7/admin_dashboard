@@ -1,75 +1,82 @@
 import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import mockAttendanceData from "@/data/mockAttendanceData";
 import { Download, Search as SearchIcon } from "lucide-react";
+import api from "@/lib/axios";
 
 const Attendance = () => {
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
+  const { data: classOptions = [] } = useQuery({
+    queryKey: ["admin", "attendance", "classes"],
+    queryFn: async () => {
+      const { data } = await api.get("/admin/attendance/classes");
+      return data || [];
+    },
+  });
+
+  const { data: subjectRows = [] } = useQuery({
+    queryKey: ["admin", "attendance", "subjects", selectedClass],
+    enabled: Boolean(selectedClass),
+    queryFn: async () => {
+      const { data } = await api.get("/admin/subjects", { params: { class_name: selectedClass } });
+      return (data || []).map((s) => ({ id: String(s.id), name: s.name }));
+    },
+  });
+
   useEffect(() => {
-    if (!selectedClass) {
-      setSelectedSubject("");
-    }
+    setSelectedSubject("");
   }, [selectedClass]);
 
-  const classOptions = useMemo(() => mockAttendanceData.map((item) => item.class), []);
-  const currentClassData = useMemo(
-    () => mockAttendanceData.find((item) => item.class === selectedClass),
-    [selectedClass],
-  );
-  const availableSubjects = currentClassData?.subjects ?? [];
-
-  const attendanceRows = useMemo(() => {
-    if (!currentClassData || !selectedSubject) {
-      return [];
-    }
-
-    const query = searchTerm.trim().toLowerCase();
-
-    return currentClassData.students
-      .filter((student) => student.name.toLowerCase().includes(query))
-      .map((student) => {
-        const statsForSubject = student.attendance[selectedSubject] ?? { total: 0, present: 0 };
-        const totalClasses = statsForSubject.total;
-        const presentClasses = statsForSubject.present;
-        const attendancePct = totalClasses ? ((presentClasses / totalClasses) * 100).toFixed(1) : "0.0";
-
+  const { data: attendanceRows = [], isFetching: attendanceLoading } = useQuery({
+    queryKey: ["admin", "attendance", "grid", selectedClass, selectedSubject, searchTerm],
+    enabled: Boolean(selectedClass && selectedSubject),
+    queryFn: async () => {
+      const { data } = await api.get("/admin/attendance", {
+        params: {
+          class_name: selectedClass,
+          subject_id: Number(selectedSubject),
+          q: searchTerm.trim() || undefined,
+        },
+      });
+      return (data || []).map((r) => {
+        const total = r.total ?? 0;
+        const present = r.present ?? 0;
+        const pct = total ? ((present / total) * 100).toFixed(1) : "0.0";
         return {
-          id: student.id,
-          name: student.name,
-          total: totalClasses,
-          present: presentClasses,
-          percentage: attendancePct,
+          id: r.id,
+          name: r.name,
+          total,
+          present,
+          percentage: pct,
         };
       });
-  }, [currentClassData, selectedSubject, searchTerm]);
+    },
+  });
+
+  const subjectNameById = useMemo(() => {
+    const m = {};
+    for (const s of subjectRows) m[s.id] = s.name;
+    return m;
+  }, [subjectRows]);
 
   const handleDownloadReport = () => {
-    if (!attendanceRows.length) {
-      return;
-    }
-
+    if (!attendanceRows.length) return;
     const header = ["Student Name", "Student ID", "Total Classes", "Present", "Attendance %"];
-    const rows = attendanceRows.map((row) => [
-      row.name,
-      row.id,
-      row.total,
-      row.present,
-      row.percentage,
-    ]);
-
+    const rows = attendanceRows.map((row) => [row.name, row.id, row.total, row.present, row.percentage]);
     const csvContent = [header, ...rows].map((row) => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${selectedClass || "attendance"}-${selectedSubject || "report"}.csv`;
+    const subLabel = subjectNameById[selectedSubject] || selectedSubject;
+    link.download = `${selectedClass || "attendance"}-${subLabel || "report"}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -78,7 +85,7 @@ const Attendance = () => {
     <div className="space-y-6">
       <div className="mb-6">
         <h2 className="text-2xl font-semibold mb-2 text-foreground">Attendance</h2>
-        <p className="text-muted-foreground">Monitor daily attendance trends across classes and subjects.</p>
+        <p className="text-muted-foreground">Monitor attendance by class and subject (live API).</p>
       </div>
 
       <Card className="p-6">
@@ -94,7 +101,7 @@ const Attendance = () => {
               <SelectContent>
                 {classOptions.map((cls) => (
                   <SelectItem key={cls} value={cls}>
-                    {cls}
+                    Class {cls}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -105,18 +112,14 @@ const Attendance = () => {
             <Label htmlFor="subjectSelect" className="text-foreground mb-2 block">
               Select Subject
             </Label>
-            <Select
-              value={selectedSubject}
-              onValueChange={setSelectedSubject}
-              disabled={!selectedClass}
-            >
+            <Select value={selectedSubject} onValueChange={setSelectedSubject} disabled={!selectedClass}>
               <SelectTrigger id="subjectSelect" className="bg-background border-border text-foreground">
                 <SelectValue placeholder="Choose a subject" />
               </SelectTrigger>
               <SelectContent>
-                {availableSubjects.map((sub) => (
-                  <SelectItem key={sub} value={sub}>
-                    {sub}
+                {subjectRows.map((sub) => (
+                  <SelectItem key={sub.id} value={sub.id}>
+                    {sub.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -145,8 +148,7 @@ const Attendance = () => {
           <p className="text-sm text-muted-foreground">
             Showing{" "}
             <span className="font-medium text-foreground">
-              {attendanceRows.length}{" "}
-              {attendanceRows.length === 1 ? "student" : "students"}
+              {attendanceRows.length} {attendanceRows.length === 1 ? "student" : "students"}
             </span>
           </p>
           <Button
@@ -176,9 +178,15 @@ const Attendance = () => {
               {attendanceRows.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="px-6 py-8 text-center text-muted-foreground">
-                    {!selectedClass
-                      ? "Select a class and subject to view attendance."
-                      : "Select a class and subject to view attendance."}
+                    {attendanceLoading
+                      ? "Loading attendance…"
+                      : !selectedClass
+                        ? "Select a class and subject to view attendance."
+                        : !subjectRows.length
+                          ? "No subjects for this class. Add subjects under Admin → Subjects, then run seed if needed."
+                          : !selectedSubject
+                            ? "Select a subject to view attendance."
+                            : "No students or no attendance data yet."}
                   </td>
                 </tr>
               ) : (

@@ -9,7 +9,7 @@ sys.path.insert(0, ROOT)
 
 from app.db.session import SessionLocal, engine  # noqa: E402
 from app.db.base import Base  # noqa: E402
-from app.db.init_db import seed_demo_users  # noqa: E402
+from app.db.init_db import seed_demo_lms_data, seed_demo_users  # noqa: E402
 
 # Ensure models are imported so SQLAlchemy knows tables.
 from app import models  # noqa: F401,E402
@@ -20,7 +20,8 @@ def main() -> None:
     db = SessionLocal()
     try:
         seed_demo_users(db)
-        print("Seeded demo users (admin/student/teacher/parent).")
+        seed_demo_lms_data(db)
+        print("Seeded demo users + shared LMS demo data (class 10 subjects, enrollments, etc.).")
     finally:
         db.close()
 

@@ -9,6 +9,7 @@ from app.models.result import Result
 from app.models.student import Student
 from app.models.subject import Subject
 from app.models.teacher import Teacher
+from app.models.teacher_student_request import TeacherStudentRequest
 from app.models.user import User
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "Student",
     "Subject",
     "Teacher",
+    "TeacherStudentRequest",
     "User",
 ]
 

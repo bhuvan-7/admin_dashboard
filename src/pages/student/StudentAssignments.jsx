@@ -1,42 +1,81 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClipboardList, Calendar, Search } from "lucide-react";
-
-const assignments = [
-  { id: "A-101", title: "Algebra Practice Set", subject: "Mathematics", due: "2026-05-14", status: "Pending" },
-  { id: "A-102", title: "Reading Comprehension", subject: "English", due: "2026-05-15", status: "Submitted" },
-  { id: "A-103", title: "Plant Cell Worksheet", subject: "Science", due: "2026-05-16", status: "Pending" },
-  { id: "A-104", title: "History Chapter Notes", subject: "Social Studies", due: "2026-05-12", status: "Graded" },
-];
+import api from "@/lib/axios";
+import { toast } from "sonner";
 
 const statusBadge = (status) => {
-  if (status === "Submitted") return "bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200";
-  if (status === "Graded") return "bg-green-100 text-green-700 hover:bg-green-100 border-green-200";
+  const s = (status || "").toLowerCase();
+  if (s === "submitted") return "bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200";
+  if (s === "graded") return "bg-green-100 text-green-700 hover:bg-green-100 border-green-200";
   return "bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200";
+};
+
+const labelStatus = (s) => {
+  const x = (s || "").toLowerCase();
+  return x.charAt(0).toUpperCase() + x.slice(1);
 };
 
 const StudentAssignments = () => {
   const [query, setQuery] = useState("");
+  const [rows, setRows] = useState([]);
+  const [subjectById, setSubjectById] = useState({});
+
+  const load = useCallback(async () => {
+    try {
+      const [aRes, sRes] = await Promise.all([api.get("/student/assignments"), api.get("/student/subjects")]);
+      const map = {};
+      for (const s of sRes.data || []) map[s.id] = s.name;
+      setSubjectById(map);
+      setRows(
+        (aRes.data || []).map((a) => ({
+          id: a.id,
+          title: a.title,
+          subject: map[a.subject_id] || `Subject #${a.subject_id}`,
+          due: a.due_date,
+          status: labelStatus(a.submission_status),
+        })),
+      );
+    } catch {
+      setRows([]);
+      toast.error("Could not load assignments.");
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return assignments;
-    return assignments.filter(
+    if (!q) return rows;
+    return rows.filter(
       (a) =>
         a.title.toLowerCase().includes(q) ||
         a.subject.toLowerCase().includes(q) ||
-        a.id.toLowerCase().includes(q),
+        String(a.id).includes(q),
     );
-  }, [query]);
+  }, [query, rows]);
+
+  const submit = async (id) => {
+    try {
+      await api.post(`/student/assignments/${id}/submit`, { status: "submitted" });
+      toast.success("Marked as submitted.");
+      await load();
+    } catch {
+      toast.error("Submit failed.");
+    }
+  };
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Assignments</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Track your assignments and due dates.</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Assignments for your enrolled subjects.</p>
         </div>
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -60,7 +99,7 @@ const StudentAssignments = () => {
                 <div className="min-w-0">
                   <p className="font-semibold text-foreground">{a.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {a.subject} • {a.id}
+                    {a.subject} • #{a.id}
                   </p>
                   <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5" />
@@ -69,9 +108,16 @@ const StudentAssignments = () => {
                 </div>
               </div>
 
-              <Badge className={statusBadge(a.status)} variant="secondary">
-                {a.status}
-              </Badge>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <Badge className={statusBadge(a.status)} variant="secondary">
+                  {a.status}
+                </Badge>
+                {a.status === "Pending" && (
+                  <Button size="sm" variant="outline" onClick={() => submit(a.id)}>
+                    Submit
+                  </Button>
+                )}
+              </div>
             </div>
           </Card>
         ))}
@@ -87,4 +133,3 @@ const StudentAssignments = () => {
 };
 
 export default StudentAssignments;
-

@@ -1,23 +1,27 @@
 from __future__ import annotations
 
-from datetime import date
+from collections import defaultdict
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import db_session, require_role
 from app.core.security import hash_password
+from app.services.student_onboarding import create_student_account_and_enroll_for_teacher_class
 from app.models.announcement import Announcement
 from app.models.assignment import Assignment
 from app.models.attendance import AttendanceMark, AttendanceSession
+from app.models.enrollment import Enrollment
 from app.models.exam import Exam
 from app.models.parent import Parent
 from app.models.result import Result
 from app.models.student import Student
 from app.models.subject import Subject
 from app.models.teacher import Teacher
+from app.models.teacher_student_request import TeacherStudentRequest
 from app.models.user import User
 from app.realtime.manager import manager
 from app.schemas.common import (
@@ -39,6 +43,14 @@ class DashboardStats(BaseModel):
     total_students: int
     total_teachers: int
     total_parents: int
+    total_subjects: int
+    total_announcements: int
+    total_assignments: int
+    total_exams: int
+    total_results: int
+    total_attendance_sessions: int
+    pending_student_requests: int = 0
+    pending_teacher_requests: int = 0
 
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
@@ -47,7 +59,145 @@ def dashboard_stats(_: User = Depends(require_role(["admin"])), db: Session = De
         total_students=db.query(Student).count(),
         total_teachers=db.query(Teacher).count(),
         total_parents=db.query(Parent).count(),
+        total_subjects=db.query(Subject).count(),
+        total_announcements=db.query(Announcement).count(),
+        total_assignments=db.query(Assignment).count(),
+        total_exams=db.query(Exam).count(),
+        total_results=db.query(Result).count(),
+        total_attendance_sessions=db.query(AttendanceSession).count(),
+        pending_student_requests=0,
+        pending_teacher_requests=db.query(TeacherStudentRequest).filter(TeacherStudentRequest.status == "pending").count(),
     )
+
+
+class TeacherRequestAdminOut(BaseModel):
+    id: int
+    teacher_id: int
+    teacher_name: str
+    full_name: str
+    class_name: str
+    roll_no: str
+    email: str | None = None
+    requested_at: datetime
+
+
+class PendingRequestsResponse(BaseModel):
+    student_requests: list[Any] = []
+    teacher_requests: list[TeacherRequestAdminOut]
+
+
+@router.get("/requests", response_model=PendingRequestsResponse)
+def list_pending_requests(_: User = Depends(require_role(["admin"])), db: Session = Depends(db_session)):
+    rows = (
+        db.query(TeacherStudentRequest)
+        .options(joinedload(TeacherStudentRequest.teacher))
+        .filter(TeacherStudentRequest.status == "pending")
+        .order_by(TeacherStudentRequest.created_at.desc())
+        .all()
+    )
+    teacher_requests = [
+        TeacherRequestAdminOut(
+            id=r.id,
+            teacher_id=r.teacher_id,
+            teacher_name=r.teacher.full_name if r.teacher else "",
+            full_name=r.full_name,
+            class_name=r.class_name,
+            roll_no=r.roll_no,
+            email=r.email,
+            requested_at=r.created_at,
+        )
+        for r in rows
+    ]
+    return PendingRequestsResponse(student_requests=[], teacher_requests=teacher_requests)
+
+
+class ApproveTeacherStudentResponse(BaseModel):
+    status: str
+    username: str
+    temporary_password: str
+    student_id: int
+
+
+@router.post("/requests/teacher/{request_id}/approve", response_model=ApproveTeacherStudentResponse)
+def approve_teacher_student_request(
+    request_id: int, _: User = Depends(require_role(["admin"])), db: Session = Depends(db_session)
+):
+    req = db.query(TeacherStudentRequest).filter(TeacherStudentRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail="Request is not pending")
+
+    dup = db.query(Student).filter(Student.class_name == req.class_name, Student.roll_no == req.roll_no).first()
+    if dup:
+        raise HTTPException(status_code=400, detail="A student with this roll number already exists in this class.")
+
+    student, username, temporary_password = create_student_account_and_enroll_for_teacher_class(
+        db,
+        teacher_id=req.teacher_id,
+        class_name=req.class_name,
+        full_name=req.full_name,
+        roll_no=req.roll_no,
+        email=req.email,
+    )
+
+    req.status = "approved"
+    req.processed_at = datetime.utcnow()
+    db.commit()
+
+    try:
+        import asyncio
+
+        asyncio.create_task(
+            manager.broadcast(
+                event="teacher.student_request.approved",
+                data={
+                    "request_id": req.id,
+                    "student_id": student.id,
+                    "username": username,
+                },
+                roles=["admin", "teacher", "student"],
+            )
+        )
+    except RuntimeError:
+        pass
+
+    return ApproveTeacherStudentResponse(
+        status="approved",
+        username=username,
+        temporary_password=temporary_password,
+        student_id=student.id,
+    )
+
+
+@router.post("/requests/teacher/{request_id}/reject")
+def reject_teacher_student_request(
+    request_id: int, _: User = Depends(require_role(["admin"])), db: Session = Depends(db_session)
+):
+    req = db.query(TeacherStudentRequest).filter(TeacherStudentRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail="Request is not pending")
+
+    req.status = "rejected"
+    req.processed_at = datetime.utcnow()
+    db.commit()
+
+    try:
+        import asyncio
+
+        asyncio.create_task(
+            manager.broadcast(
+                event="teacher.student_request.rejected",
+                data={"request_id": req.id},
+                roles=["admin", "teacher"],
+            )
+        )
+    except RuntimeError:
+        pass
+
+    return {"status": "ok"}
 
 
 class CreateTeacher(BaseModel):
@@ -58,10 +208,49 @@ class CreateTeacher(BaseModel):
     email: str | None = None
 
 
-@router.get("/teachers", response_model=list[TeacherOut])
+class TeacherListOut(BaseModel):
+    id: int
+    user_id: int
+    full_name: str
+    department: str | None = None
+    email: str | None = None
+    subjects_taught: list[str]
+    class_names: list[str]
+    student_count: int
+
+
+@router.get("/teachers", response_model=list[TeacherListOut])
 def list_teachers(_: User = Depends(require_role(["admin"])), db: Session = Depends(db_session)):
-    rows = db.query(Teacher).all()
-    return [TeacherOut(**t.__dict__) for t in rows]
+    teachers = db.query(Teacher).all()
+    subjects = db.query(Subject).all()
+    enrollments = db.query(Enrollment).all()
+    subject_by_id = {s.id: s for s in subjects}
+    teacher_to_students: dict[int, set[int]] = defaultdict(set)
+    teacher_to_subjects: dict[int, set[str]] = defaultdict(set)
+    teacher_to_classes: dict[int, set[str]] = defaultdict(set)
+    for e in enrollments:
+        sub = subject_by_id.get(e.subject_id)
+        if not sub or not sub.teacher_id:
+            continue
+        tid = sub.teacher_id
+        teacher_to_students[tid].add(e.student_id)
+        teacher_to_subjects[tid].add(sub.name)
+        teacher_to_classes[tid].add(sub.class_name)
+    out: list[TeacherListOut] = []
+    for t in teachers:
+        out.append(
+            TeacherListOut(
+                id=t.id,
+                user_id=t.user_id,
+                full_name=t.full_name,
+                department=t.department,
+                email=t.email,
+                subjects_taught=sorted(teacher_to_subjects[t.id]) if t.id in teacher_to_subjects else [],
+                class_names=sorted(teacher_to_classes[t.id]) if t.id in teacher_to_classes else [],
+                student_count=len(teacher_to_students[t.id]) if t.id in teacher_to_students else 0,
+            )
+        )
+    return out
 
 
 @router.post("/teachers", response_model=TeacherOut, status_code=status.HTTP_201_CREATED)
@@ -186,8 +375,34 @@ def list_subjects(class_name: str | None = None, _: User = Depends(require_role(
 
 @router.post("/subjects", response_model=SubjectOut, status_code=status.HTTP_201_CREATED)
 def create_subject(payload: CreateSubject, _: User = Depends(require_role(["admin"])), db: Session = Depends(db_session)):
-    subject = Subject(**payload.model_dump())
+    data = payload.model_dump()
+    if data.get("teacher_id") is not None:
+        if not db.query(Teacher).filter(Teacher.id == data["teacher_id"]).first():
+            raise HTTPException(status_code=400, detail="Teacher not found")
+    subject = Subject(**data)
     db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    return SubjectOut(**subject.__dict__)
+
+
+class PatchSubject(BaseModel):
+    teacher_id: int | None = None
+
+
+@router.patch("/subjects/{subject_id}", response_model=SubjectOut)
+def patch_subject(
+    subject_id: int, payload: PatchSubject, _: User = Depends(require_role(["admin"])), db: Session = Depends(db_session)
+):
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if "teacher_id" in updates:
+        tid = updates["teacher_id"]
+        if tid is not None and not db.query(Teacher).filter(Teacher.id == tid).first():
+            raise HTTPException(status_code=400, detail="Teacher not found")
+        subject.teacher_id = tid
     db.commit()
     db.refresh(subject)
     return SubjectOut(**subject.__dict__)

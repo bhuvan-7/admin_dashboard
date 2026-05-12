@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,12 +30,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BookOpen, User, FileText, ChevronDown } from "lucide-react";
+import { BookOpen, User, FileText } from "lucide-react";
 import { toast } from "sonner";
+import api from "@/lib/axios";
 
 const Subjects = () => {
-  const [subjects, setSubjects] = useState([]);
-  const [selectedClass, setSelectedClass] = useState("1");
+  const queryClient = useQueryClient();
+  const [selectedClass, setSelectedClass] = useState("10");
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [addRemoveDialogOpen, setAddRemoveDialogOpen] = useState(false);
@@ -46,62 +48,50 @@ const Subjects = () => {
     class: "",
     syllabus: "",
     notes: "",
-    teacher: "",
+    teacherId: "__none__",
   });
   const [removeSubjectId, setRemoveSubjectId] = useState("");
+  const [assignTeacherId, setAssignTeacherId] = useState("__none__");
+  const [savingAssign, setSavingAssign] = useState(false);
 
   const classes = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
 
-  useEffect(() => {
-    // Mock data for subjects
-    setSubjects([
-      {
-        id: 1,
-        name: "Mathematics",
-        code: "MATH101",
-        class: "1",
-        teacher: "Dr. Rajesh Kumar",
-        syllabus: "Numbers, Addition, Subtraction, Shapes, Patterns",
-        notes: "Basic arithmetic operations and geometric shapes for beginners",
-      },
-      {
-        id: 2,
-        name: "English",
-        code: "ENG101",
-        class: "1",
-        teacher: "Ms. Priya Sharma",
-        syllabus: "Alphabets, Phonics, Simple Words, Rhymes",
-        notes: "Introduction to English language with fun activities",
-      },
-      {
-        id: 3,
-        name: "Science",
-        code: "SCI201",
-        class: "2",
-        teacher: "Dr. Amit Patel",
-        syllabus: "Plants, Animals, Human Body, Water, Air",
-        notes: "Basic science concepts with practical examples",
-      },
-      {
-        id: 4,
-        name: "Mathematics",
-        code: "MATH201",
-        class: "2",
-        teacher: "Dr. Rajesh Kumar",
-        syllabus: "Multiplication, Division, Fractions, Time, Money",
-        notes: "Advanced arithmetic with real-world applications",
-      },
-      {
-        id: 5,
-        name: "Social Studies",
-        code: "SST301",
-        class: "3",
-        teacher: "Mr. Suresh Reddy",
-        syllabus: "Family, Community, Maps, History basics",
-        notes: "Understanding society and basic geography",
-      },
-    ]);
-  }, []);
+  const { data: teachersList = [] } = useQuery({
+    queryKey: ["admin", "teachers"],
+    queryFn: async () => {
+      const { data } = await api.get("/admin/teachers");
+      return Array.isArray(data) ? data : [];
+    },
+  });
+
+  const {
+    data: subjects = [],
+    isLoading: subjectsLoading,
+    isError: subjectsError,
+    error: subjectsErr,
+  } = useQuery({
+    queryKey: ["admin", "subjects", "page", selectedClass],
+    queryFn: async () => {
+      const [tRes, sRes] = await Promise.all([
+        api.get("/admin/teachers"),
+        api.get("/admin/subjects", { params: { class_name: selectedClass } }),
+      ]);
+      const teachers = Array.isArray(tRes.data) ? tRes.data : [];
+      const rows = Array.isArray(sRes.data) ? sRes.data : [];
+      const map = {};
+      for (const t of teachers) map[t.id] = t.full_name;
+      return rows.map((s) => ({
+        id: s.id,
+        name: s.name,
+        code: s.code,
+        class: s.class_name,
+        teacher_id: s.teacher_id ?? null,
+        teacher: map[s.teacher_id] || null,
+        syllabus: s.syllabus || "",
+        notes: s.notes || "",
+      }));
+    },
+  });
 
   const filteredSubjects = subjects.filter((subject) => subject.class === selectedClass);
 
@@ -119,9 +109,15 @@ const Subjects = () => {
       class: selectedClass,
       syllabus: "",
       notes: "",
-      teacher: "",
+      teacherId: "__none__",
     });
   };
+
+  useEffect(() => {
+    if (detailDialogOpen && selectedSubject) {
+      setAssignTeacherId(selectedSubject.teacher_id != null ? String(selectedSubject.teacher_id) : "__none__");
+    }
+  }, [detailDialogOpen, selectedSubject]);
 
   const handleFormChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -153,22 +149,30 @@ const Subjects = () => {
     setConfirmDialogOpen(true);
   };
 
-  const handleConfirmAdd = () => {
-    const newSubject = {
-      id: subjects.length + 1,
-      ...formData,
-    };
-    setSubjects((prev) => [...prev, newSubject]);
-    setConfirmDialogOpen(false);
-    toast.success("Subject added successfully!");
-    setFormData({
-      name: "",
-      code: "",
-      class: "",
-      syllabus: "",
-      notes: "",
-      teacher: "",
-    });
+  const handleConfirmAdd = async () => {
+    try {
+      await api.post("/admin/subjects", {
+        name: formData.name.trim(),
+        code: formData.code.trim(),
+        class_name: formData.class,
+        syllabus: formData.syllabus.trim(),
+        notes: formData.notes?.trim() || null,
+        teacher_id: formData.teacherId === "__none__" ? null : Number(formData.teacherId),
+      });
+      setConfirmDialogOpen(false);
+      toast.success("Subject added successfully!");
+      setFormData({
+        name: "",
+        code: "",
+        class: "",
+        syllabus: "",
+        notes: "",
+        teacherId: "__none__",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+    } catch {
+      toast.error("Could not add subject.");
+    }
   };
 
   const handleRemoveClick = () => {
@@ -176,16 +180,21 @@ const Subjects = () => {
     setRemoveSubjectId("");
   };
 
-  const handleConfirmRemove = () => {
+  const handleConfirmRemove = async () => {
     if (!removeSubjectId) {
       toast.error("Please select a subject to remove");
       return;
     }
-    setSubjects((prev) => prev.filter((subject) => subject.id.toString() !== removeSubjectId));
-    setAddRemoveDialogOpen(false);
-    setConfirmDialogOpen(false);
-    toast.success("Subject removed successfully!");
-    setRemoveSubjectId("");
+    try {
+      await api.delete(`/admin/subjects/${removeSubjectId}`);
+      setAddRemoveDialogOpen(false);
+      setConfirmDialogOpen(false);
+      toast.success("Subject removed successfully!");
+      setRemoveSubjectId("");
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+    } catch {
+      toast.error("Could not remove subject.");
+    }
   };
 
   return (
@@ -222,11 +231,23 @@ const Subjects = () => {
       </div>
 
       {/* Subject Cards Grid */}
-      {filteredSubjects.length === 0 ? (
+      {subjectsError && (
+        <Card className="p-6 text-center border-destructive/50">
+          <p className="text-sm text-destructive font-medium">Could not load subjects.</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            {subjectsErr?.response?.data?.detail || subjectsErr?.message || "Check that the API is running and you are logged in as admin."}
+          </p>
+        </Card>
+      )}
+      {!subjectsError && subjectsLoading ? (
+        <Card className="p-6 text-center">
+          <p className="text-sm text-muted-foreground">Loading subjects…</p>
+        </Card>
+      ) : !subjectsError && filteredSubjects.length === 0 ? (
         <Card className="p-6 text-center">
           <p className="text-sm text-muted-foreground">No subjects found for Class {selectedClass}</p>
         </Card>
-      ) : (
+      ) : !subjectsError ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredSubjects.map((subject) => (
             <Card
@@ -261,7 +282,7 @@ const Subjects = () => {
             </Card>
           ))}
         </div>
-      )}
+      ) : null}
 
       {/* Subject Detail Dialog */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
@@ -287,12 +308,53 @@ const Subjects = () => {
                   <Label className="text-muted-foreground">Class</Label>
                   <p className="text-lg font-semibold text-foreground">Class {selectedSubject.class}</p>
                 </div>
-                <div>
-                  <Label className="text-muted-foreground">Teacher Assigned</Label>
-                  <p className="text-lg font-semibold text-foreground">
-                    {selectedSubject.teacher || "Not Assigned"}
-                  </p>
-                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Assign teacher</Label>
+                <Select value={assignTeacherId} onValueChange={setAssignTeacherId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select teacher" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {teachersList.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={savingAssign}
+                  onClick={async () => {
+                    setSavingAssign(true);
+                    try {
+                      await api.patch(`/admin/subjects/${selectedSubject.id}`, {
+                        teacher_id: assignTeacherId === "__none__" ? null : Number(assignTeacherId),
+                      });
+                      toast.success("Teacher assignment updated.");
+                      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+                      const name =
+                        assignTeacherId === "__none__"
+                          ? null
+                          : teachersList.find((x) => String(x.id) === assignTeacherId)?.full_name ?? null;
+                      setSelectedSubject({
+                        ...selectedSubject,
+                        teacher_id: assignTeacherId === "__none__" ? null : Number(assignTeacherId),
+                        teacher: name,
+                      });
+                    } catch {
+                      toast.error("Could not update assignment.");
+                    } finally {
+                      setSavingAssign(false);
+                    }
+                  }}
+                >
+                  {savingAssign ? "Saving…" : "Save assignment"}
+                </Button>
               </div>
 
               <div>
@@ -363,13 +425,20 @@ const Subjects = () => {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="teacher">Teacher Assigned (Optional)</Label>
-                  <Input
-                    id="teacher"
-                    value={formData.teacher}
-                    onChange={(e) => handleFormChange("teacher", e.target.value)}
-                    placeholder="e.g. Dr. John Doe"
-                  />
+                  <Label>Teacher (optional)</Label>
+                  <Select value={formData.teacherId} onValueChange={(value) => handleFormChange("teacherId", value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select teacher" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {teachersList.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

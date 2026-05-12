@@ -34,6 +34,8 @@ const Topbar = ({ onLogout, userRole }) => {
 
   const labelMap = {
     dashboard: "Dashboard",
+    teacher: "Teacher",
+    "request-student": "Request student",
     requests: "Requests",
     teachers: "Teachers",
     students: "Students",

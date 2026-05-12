@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,12 +24,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { UserPlus, ArrowLeft } from "lucide-react";
+import api from "@/lib/axios";
 
 const AddTeacher = () => {
+  const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
+    username: "",
+    password: "",
     firstName: "",
     email: "",
     phone: "",
@@ -47,17 +52,11 @@ const AddTeacher = () => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.firstName.trim()) newErrors.firstName = "First name is required";
+    if (!formData.firstName.trim()) newErrors.firstName = "Full name is required";
+    if (!formData.username.trim()) newErrors.username = "Username is required";
+    if (!formData.password || formData.password.length < 6) newErrors.password = "Password must be at least 6 characters";
     if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) newErrors.email = "Valid email is required";
-    if (!formData.phone.match(/^\d{10}$/)) newErrors.phone = "Phone must be 10 digits";
-    if (!formData.gender) newErrors.gender = "Gender is required";
-    if (!formData.qualification.trim()) newErrors.qualification = "Qualification is required";
-    if (!formData.experience || parseInt(formData.experience) < 0) newErrors.experience = "Valid experience is required";
-    if (!formData.subject.trim()) newErrors.subject = "Subject is required";
-    if (!formData.assignedClasses.trim()) newErrors.assignedClasses = "Assigned classes are required";
-    if (!formData.country.trim()) newErrors.country = "Country is required";
-    if (!formData.state.trim()) newErrors.state = "State is required";
-    if (!formData.city.trim()) newErrors.city = "City is required";
+    if (!formData.subject.trim()) newErrors.subject = "Subject / department is required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -73,17 +72,18 @@ const AddTeacher = () => {
   const confirmSubmit = async () => {
     try {
       setSubmitting(true);
-      
-      // TODO: Replace with axios call
-      // Example:
-      // const response = await axios.post('/api/teachers', formData);
-      // toast.success(`Teacher ${formData.firstName} has been added successfully!`);
-      // Reset form after successful submission
-      
-      // Mock success for now
+      await api.post("/admin/teachers", {
+        username: formData.username.trim(),
+        password: formData.password,
+        full_name: formData.firstName.trim(),
+        department: formData.subject.trim(),
+        email: formData.email.trim() || null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
       toast.success(`Teacher ${formData.firstName} has been added successfully!`);
-      
       setFormData({
+        username: "",
+        password: "",
         firstName: "",
         email: "",
         phone: "",
@@ -99,7 +99,8 @@ const AddTeacher = () => {
       setErrors({});
       setDialogOpen(false);
     } catch (error) {
-      toast.error(`Error adding teacher: ${error.message}`);
+      const detail = error?.response?.data?.detail;
+      toast.error(detail ? String(detail) : `Error adding teacher: ${error.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -131,15 +132,42 @@ const AddTeacher = () => {
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Personal Information Section */}
           <div>
-            <h2 className="text-xl font-semibold text-foreground mb-4">Personal Information</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-4">Account and profile</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="firstName">First Name *</Label>
+                <Label htmlFor="username">Login username *</Label>
+                <Input
+                  id="username"
+                  value={formData.username}
+                  onChange={(e) => handleChange("username", e.target.value)}
+                  placeholder="e.g. jsingh"
+                  autoComplete="username"
+                  className={errors.username ? "border-destructive" : ""}
+                />
+                {errors.username && <p className="text-sm text-destructive">{errors.username}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Initial password *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => handleChange("password", e.target.value)}
+                  placeholder="At least 6 characters"
+                  autoComplete="new-password"
+                  className={errors.password ? "border-destructive" : ""}
+                />
+                {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="firstName">Full name *</Label>
                 <Input
                   id="firstName"
                   value={formData.firstName}
                   onChange={(e) => handleChange("firstName", e.target.value)}
-                  placeholder="Enter first name"
+                  placeholder="Full name as it should appear"
                   className={errors.firstName ? "border-destructive" : ""}
                 />
                 {errors.firstName && <p className="text-sm text-destructive">{errors.firstName}</p>}
@@ -159,25 +187,19 @@ const AddTeacher = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number *</Label>
+                <Label htmlFor="phone">Phone (optional, not stored on teacher record yet)</Label>
                 <Input
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => handleChange("phone", e.target.value)}
-                  placeholder="10 digit phone number"
-                  maxLength={10}
-                  className={errors.phone ? "border-destructive" : ""}
+                  placeholder="Contact number"
                 />
-                {errors.phone && <p className="text-sm text-destructive">{errors.phone}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="gender">Gender *</Label>
-                <Select
-                  value={formData.gender}
-                  onValueChange={(value) => handleChange("gender", value)}
-                >
-                  <SelectTrigger className={errors.gender ? "border-destructive" : ""}>
+                <Label htmlFor="gender">Gender (optional)</Label>
+                <Select value={formData.gender} onValueChange={(value) => handleChange("gender", value)}>
+                  <SelectTrigger>
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>
@@ -186,29 +208,30 @@ const AddTeacher = () => {
                     <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.gender && <p className="text-sm text-destructive">{errors.gender}</p>}
               </div>
             </div>
           </div>
 
           {/* Professional Information Section */}
           <div className="pt-6 border-t">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Professional Information</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-4">Professional (optional notes)</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Only <span className="font-medium text-foreground">Subject / department</span> is saved to the API today
+              (as the teacher&apos;s department). Other fields are for your records only.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="qualification">Qualification *</Label>
+                <Label htmlFor="qualification">Qualification (optional)</Label>
                 <Input
                   id="qualification"
                   value={formData.qualification}
                   onChange={(e) => handleChange("qualification", e.target.value)}
                   placeholder="e.g., M.Sc, B.Ed"
-                  className={errors.qualification ? "border-destructive" : ""}
                 />
-                {errors.qualification && <p className="text-sm text-destructive">{errors.qualification}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="experience">Experience (Years) *</Label>
+                <Label htmlFor="experience">Experience years (optional)</Label>
                 <Input
                   id="experience"
                   type="number"
@@ -216,75 +239,65 @@ const AddTeacher = () => {
                   value={formData.experience}
                   onChange={(e) => handleChange("experience", e.target.value)}
                   placeholder="Years of experience"
-                  className={errors.experience ? "border-destructive" : ""}
                 />
-                {errors.experience && <p className="text-sm text-destructive">{errors.experience}</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="subject">Subject *</Label>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="subject">Subject / department *</Label>
                 <Input
                   id="subject"
                   value={formData.subject}
                   onChange={(e) => handleChange("subject", e.target.value)}
-                  placeholder="e.g., Mathematics, Science"
+                  placeholder="e.g., Mathematics — stored as department"
                   className={errors.subject ? "border-destructive" : ""}
                 />
                 {errors.subject && <p className="text-sm text-destructive">{errors.subject}</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="assignedClasses">Assigned Classes *</Label>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="assignedClasses">Assigned classes (optional note)</Label>
                 <Input
                   id="assignedClasses"
                   value={formData.assignedClasses}
                   onChange={(e) => handleChange("assignedClasses", e.target.value)}
-                  placeholder="e.g., Class 9, Class 10"
-                  className={errors.assignedClasses ? "border-destructive" : ""}
+                  placeholder="Link teachers to classes via Subjects page"
                 />
-                {errors.assignedClasses && <p className="text-sm text-destructive">{errors.assignedClasses}</p>}
               </div>
             </div>
           </div>
 
           {/* Location Information Section */}
           <div className="pt-6 border-t">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Location Information</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-4">Location (optional, not sent to API)</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="country">Country *</Label>
+                <Label htmlFor="country">Country</Label>
                 <Input
                   id="country"
                   value={formData.country}
                   onChange={(e) => handleChange("country", e.target.value)}
                   placeholder="Enter country"
-                  className={errors.country ? "border-destructive" : ""}
                 />
-                {errors.country && <p className="text-sm text-destructive">{errors.country}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="state">State *</Label>
+                <Label htmlFor="state">State</Label>
                 <Input
                   id="state"
                   value={formData.state}
                   onChange={(e) => handleChange("state", e.target.value)}
                   placeholder="Enter state"
-                  className={errors.state ? "border-destructive" : ""}
                 />
-                {errors.state && <p className="text-sm text-destructive">{errors.state}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="city">City *</Label>
+                <Label htmlFor="city">City</Label>
                 <Input
                   id="city"
                   value={formData.city}
                   onChange={(e) => handleChange("city", e.target.value)}
                   placeholder="Enter city"
-                  className={errors.city ? "border-destructive" : ""}
                 />
-                {errors.city && <p className="text-sm text-destructive">{errors.city}</p>}
               </div>
             </div>
           </div>

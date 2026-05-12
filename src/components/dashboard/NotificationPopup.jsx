@@ -1,30 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { X, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
-const NotificationPopup = () => {
+const NotificationPopup = ({ pendingStudent = 0, pendingTeacher = 0 }) => {
   const [visible, setVisible] = useState(true);
-  const [studentCount, setStudentCount] = useState(2);
-  const [teacherCount, setTeacherCount] = useState(3);
 
-  useEffect(() => {
-    // TODO: Replace with axios call to fetch pending request counts
-    // Example:
-    // const fetchPendingCounts = async () => {
-    //   try {
-    //     const response = await axios.get('/api/requests/pending/count');
-    //     setStudentCount(response.data.studentCount);
-    //     setTeacherCount(response.data.teacherCount);
-    //   } catch (err) {
-    //     console.error("Error fetching pending count:", err);
-    //   }
-    // };
-    // fetchPendingCounts();
-  }, []);
+  const totalCount = (pendingStudent || 0) + (pendingTeacher || 0);
 
-  const totalCount = studentCount + teacherCount;
-  
   if (!visible || totalCount === 0) return null;
 
   return (
@@ -34,14 +17,13 @@ const NotificationPopup = () => {
           <AlertCircle className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <p className="font-semibold text-foreground">
-            New Pending Requests
-          </p>
+          <p className="font-semibold text-foreground">New pending requests</p>
           <p className="text-sm text-muted-foreground">
-            {studentCount > 0 && `${studentCount} student request${studentCount > 1 ? "s" : ""}`}
-            {studentCount > 0 && teacherCount > 0 && " and "}
-            {teacherCount > 0 && `${teacherCount} teacher request${teacherCount > 1 ? "s" : ""}`}
-            {" "}waiting for review
+            {pendingStudent > 0 && `${pendingStudent} student request${pendingStudent > 1 ? "s" : ""}`}
+            {pendingStudent > 0 && pendingTeacher > 0 && " and "}
+            {pendingTeacher > 0 && `${pendingTeacher} teacher request${pendingTeacher > 1 ? "s" : ""}`}
+            {" "}
+            waiting for review
           </p>
         </div>
       </div>
@@ -49,11 +31,7 @@ const NotificationPopup = () => {
         <Button asChild>
           <Link to="/requests">View Requests</Link>
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setVisible(false)}
-        >
+        <Button variant="ghost" size="icon" onClick={() => setVisible(false)}>
           <X className="w-4 h-4" />
         </Button>
       </div>

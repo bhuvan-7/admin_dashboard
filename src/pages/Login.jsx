@@ -5,6 +5,7 @@ import api from "@/lib/axios";
 
 const getHomeRouteForRole = (roleId) => {
   if (roleId === "student") return "/student";
+  if (roleId === "teacher") return "/teacher";
   return "/";
 };
 

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +16,16 @@ import {
 } from "@/components/ui/dialog";
 import { Megaphone, Clock, Users } from "lucide-react";
 import { toast } from "sonner";
+import api from "@/lib/axios";
+
+const audienceToRecipients = (audience) => {
+  const key = (audience || "").toLowerCase();
+  const map = { all: ["All"], students: ["Students"], teachers: ["Teachers"], parents: ["Parents"] };
+  return map[key] || [audience || "All"];
+};
 
 const Announcements = () => {
-  const [announcements, setAnnouncements] = useState([]);
+  const queryClient = useQueryClient();
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -31,39 +39,26 @@ const Announcements = () => {
     },
   });
 
-  useEffect(() => {
-    // Mock data for announcements
-    setAnnouncements([
-      {
-        id: 1,
-        title: "School Holiday Notification",
-        description: "School will remain closed on Friday, 26th January due to Republic Day. Classes will resume on Monday, 29th January.",
-        recipients: ["All"],
-        timestamp: "2024-01-20 10:30 AM",
-      },
-      {
-        id: 2,
-        title: "Parent-Teacher Meeting",
-        description: "Parent-Teacher meeting is scheduled for next Saturday. All parents are requested to attend the meeting to discuss their child's progress.",
-        recipients: ["Parents"],
-        timestamp: "2024-01-19 02:15 PM",
-      },
-      {
-        id: 3,
-        title: "Exam Schedule Released",
-        description: "The final examination schedule for all classes has been released. Students can check the schedule on the notice board or download from the portal.",
-        recipients: ["Students", "Parents"],
-        timestamp: "2024-01-18 09:00 AM",
-      },
-      {
-        id: 4,
-        title: "Staff Training Workshop",
-        description: "A professional development workshop for all teaching staff will be conducted next Wednesday. Attendance is mandatory.",
-        recipients: ["Teachers"],
-        timestamp: "2024-01-17 11:45 AM",
-      },
-    ]);
-  }, []);
+  const { data: announcements = [] } = useQuery({
+    queryKey: ["admin", "announcements"],
+    queryFn: async () => {
+      const { data } = await api.get("/admin/announcements");
+      return (data || []).map((a) => ({
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        recipients: audienceToRecipients(a.audience),
+        timestamp: new Date(a.created_at).toLocaleString("en-IN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }),
+      }));
+    },
+  });
 
   const handleFormChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -108,47 +103,41 @@ const Announcements = () => {
     return true;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateForm()) return;
 
-    const recipients = [];
+    const audiences = [];
     if (formData.recipients.all) {
-      recipients.push("All");
+      audiences.push("all");
     } else {
-      if (formData.recipients.students) recipients.push("Students");
-      if (formData.recipients.teachers) recipients.push("Teachers");
-      if (formData.recipients.parents) recipients.push("Parents");
+      if (formData.recipients.students) audiences.push("students");
+      if (formData.recipients.teachers) audiences.push("teachers");
+      if (formData.recipients.parents) audiences.push("parents");
     }
 
-    const newAnnouncement = {
-      id: announcements.length + 1,
-      title: formData.title,
-      description: formData.description,
-      recipients: recipients,
-      timestamp: new Date().toLocaleString("en-IN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      }),
-    };
-
-    setAnnouncements((prev) => [newAnnouncement, ...prev]);
-    toast.success("Announcement sent successfully!");
-
-    // Reset form
-    setFormData({
-      title: "",
-      description: "",
-      recipients: {
-        all: false,
-        students: false,
-        teachers: false,
-        parents: false,
-      },
-    });
+    try {
+      for (const audience of audiences) {
+        await api.post("/admin/announcements", {
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          audience,
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      toast.success("Announcement sent successfully!");
+      setFormData({
+        title: "",
+        description: "",
+        recipients: {
+          all: false,
+          students: false,
+          teachers: false,
+          parents: false,
+        },
+      });
+    } catch {
+      toast.error("Could not create announcement.");
+    }
   };
 
   const handleCardClick = (announcement) => {

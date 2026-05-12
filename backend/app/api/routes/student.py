@@ -19,7 +19,8 @@ from app.models.student import Student
 from app.models.subject import Subject
 from app.models.user import User
 from app.realtime.manager import manager
-from app.schemas.common import AnnouncementOut, AssignmentOut, ExamOut, ResultOut, SubjectOut
+from app.models.teacher import Teacher
+from app.schemas.common import AnnouncementOut, AssignmentOut, ExamOut, ResultOut, SubjectWithTeacherOut
 
 
 router = APIRouter()
@@ -32,12 +33,30 @@ def _get_student_row(db: Session, user: User) -> Student:
     return student
 
 
-@router.get("/subjects", response_model=list[SubjectOut])
+@router.get("/subjects", response_model=list[SubjectWithTeacherOut])
 def my_subjects(user: User = Depends(require_role(["student"])), db: Session = Depends(db_session)):
     student = _get_student_row(db, user)
     subject_ids = [r[0] for r in db.query(Enrollment.subject_id).filter(Enrollment.student_id == student.id).all()]
     rows = db.query(Subject).filter(Subject.id.in_(subject_ids) if subject_ids else False).all()
-    return [SubjectOut(**s.__dict__) for s in rows]
+    out: list[SubjectWithTeacherOut] = []
+    for s in rows:
+        tname = None
+        if s.teacher_id:
+            t = db.query(Teacher).filter(Teacher.id == s.teacher_id).first()
+            tname = t.full_name if t else None
+        out.append(
+            SubjectWithTeacherOut(
+                id=s.id,
+                name=s.name,
+                code=s.code,
+                class_name=s.class_name,
+                teacher_id=s.teacher_id,
+                syllabus=s.syllabus,
+                notes=s.notes,
+                teacher_name=tname,
+            )
+        )
+    return out
 
 
 @router.get("/exams", response_model=list[ExamOut])
