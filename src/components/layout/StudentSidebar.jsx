@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-import { LayoutDashboard, BookOpen, ClipboardList, CalendarCheck2, Megaphone, Award, Layers } from "lucide-react";
+import { LayoutDashboard, BookOpen, ClipboardList, CalendarCheck2, Megaphone, Award, Layers, UserCheck, User } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -19,9 +19,10 @@ const StudentSidebar = () => {
     { icon: BookOpen, label: "Subjects", path: "/student/subjects" },
     { icon: CalendarCheck2, label: "Exams", path: "/student/exams" },
     { icon: ClipboardList, label: "Assignments", path: "/student/assignments" },
-    { icon: CalendarCheck2, label: "Attendance", path: "/student/attendance" },
+    { icon: UserCheck, label: "Attendance", path: "/student/attendance" },
     { icon: Megaphone, label: "Announcements", path: "/student/announcements" },
     { icon: Award, label: "Results", path: "/student/results" },
+    { icon: User, label: "Profile", path: "/student/profile" },
   ];
 
   const MenuItem = ({ item }) => {

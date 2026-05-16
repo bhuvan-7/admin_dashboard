@@ -27,6 +27,7 @@ import StudentAssignments from "./pages/student/StudentAssignments";
 import StudentAttendance from "./pages/student/StudentAttendance";
 import StudentAnnouncements from "./pages/student/StudentAnnouncements";
 import StudentResults from "./pages/student/StudentResults";
+import StudentProfile from "./pages/student/StudentProfile";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import TeacherRequestStudent from "./pages/teacher/TeacherRequestStudent";
 import api from "./lib/axios";
@@ -190,6 +191,14 @@ const AppShell = () => {
                     element={
                       <ProtectedLayout onLogout={handleLogout} userRole={userRole} SidebarComponent={StudentSidebar}>
                         <StudentResults />
+                      </ProtectedLayout>
+                    }
+                  />
+                  <Route
+                    path="/student/profile"
+                    element={
+                      <ProtectedLayout onLogout={handleLogout} userRole={userRole} SidebarComponent={StudentSidebar}>
+                        <StudentProfile />
                       </ProtectedLayout>
                     }
                   />

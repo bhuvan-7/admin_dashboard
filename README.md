@@ -68,7 +68,7 @@ Browser (React @ :8080)
 |--------|---------|
 | `/api/auth` | Login, refresh, logout, current user |
 | `/api/admin` | Dashboard stats, teachers, students, parents, subjects, attendance, announcements, results, requests |
-| `/api/student` | Enrolled subjects, exams, assignments, attendance, announcements, results |
+| `/api/student` | Profile, dashboard summary, subjects (with syllabus/notes), exams, assignments (submit + grades/feedback), attendance summary & history, announcements, results |
 | `/api/teacher` | Dashboard summary, student join requests |
 | `/api/health` | Health check |
 | `/ws` | Real-time events (JWT via query `token`) |
@@ -97,7 +97,11 @@ Users, Teachers, Students, Parents, Subjects, Enrollments, Announcements, Exams,
 
 ### Student
 - Student portal (`/student/*`)
-- Subjects, exams, assignments, attendance, announcements, results
+- Profile (`/student/me`) and dashboard summary API
+- Subjects with syllabus and teacher notes
+- Assignments: submit, view grades and teacher feedback
+- Attendance: per-subject summary and session history
+- Exams, announcements, results
 
 ### Credentials rules
 - **Teachers** (added by admin): username and password set on **Add Teacher** form.

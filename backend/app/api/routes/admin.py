@@ -13,6 +13,7 @@ from app.core.security import hash_password
 from app.services.student_onboarding import create_student_account_and_enroll_for_teacher_class
 from app.models.announcement import Announcement
 from app.models.assignment import Assignment
+from app.models.assignment_submission import AssignmentSubmission
 from app.models.attendance import AttendanceMark, AttendanceSession
 from app.models.enrollment import Enrollment
 from app.models.exam import Exam
@@ -675,4 +676,88 @@ def create_assignment(
 def list_assignments(_: User = Depends(require_role(["admin"])), db: Session = Depends(db_session)):
     rows = db.query(Assignment).order_by(Assignment.created_at.desc()).all()
     return [AssignmentOut(**a.__dict__) for a in rows]
+
+
+class AssignmentSubmissionOut(BaseModel):
+    id: int
+    assignment_id: int
+    student_id: int
+    status: str
+    submitted_at: datetime | None
+    grade: str | None
+    feedback: str | None
+
+
+class GradeAssignmentSubmission(BaseModel):
+    student_id: int
+    grade: str
+    feedback: str | None = None
+    status: str = "graded"
+
+
+@router.get("/assignments/{assignment_id}/submissions", response_model=list[AssignmentSubmissionOut])
+def list_assignment_submissions(
+    assignment_id: int,
+    _: User = Depends(require_role(["admin"])),
+    db: Session = Depends(db_session),
+):
+    if not db.query(Assignment).filter(Assignment.id == assignment_id).first():
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    rows = db.query(AssignmentSubmission).filter(AssignmentSubmission.assignment_id == assignment_id).all()
+    return [AssignmentSubmissionOut(**r.__dict__) for r in rows]
+
+
+@router.post("/assignments/{assignment_id}/grade", response_model=AssignmentSubmissionOut)
+def grade_assignment_submission(
+    assignment_id: int,
+    payload: GradeAssignmentSubmission,
+    _: User = Depends(require_role(["admin"])),
+    db: Session = Depends(db_session),
+):
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    row = (
+        db.query(AssignmentSubmission)
+        .filter(
+            AssignmentSubmission.assignment_id == assignment_id,
+            AssignmentSubmission.student_id == payload.student_id,
+        )
+        .first()
+    )
+    if not row:
+        row = AssignmentSubmission(
+            assignment_id=assignment_id,
+            student_id=payload.student_id,
+            status=payload.status,
+            submitted_at=datetime.utcnow(),
+        )
+        db.add(row)
+    row.status = payload.status
+    row.grade = payload.grade.strip()
+    row.feedback = (payload.feedback.strip() if payload.feedback else None) or None
+    if not row.submitted_at:
+        row.submitted_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+
+    try:
+        import asyncio
+
+        asyncio.create_task(
+            manager.broadcast(
+                event="assignment.submission.graded",
+                data={
+                    "assignment_id": assignment_id,
+                    "student_id": payload.student_id,
+                    "grade": row.grade,
+                },
+                roles=["student", "admin"],
+            )
+        )
+    except RuntimeError:
+        pass
+
+    return AssignmentSubmissionOut(**row.__dict__)
 

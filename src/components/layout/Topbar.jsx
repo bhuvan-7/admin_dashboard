@@ -48,6 +48,7 @@ const Topbar = ({ onLogout, userRole }) => {
     attendance: "Attendance",
     announcements: "Announcements",
     results: "Results",
+    profile: "Profile",
   };
 
   const breadcrumbs = segments.length

@@ -71,10 +71,17 @@ const StudentResults = () => {
   }, [rows]);
 
   return (
-    <div className="space-y-6">
-      <div className="mb-2">
-        <h2 className="text-2xl font-semibold mb-2 text-foreground">Results</h2>
-        <p className="text-muted-foreground">Marks published by your school (same records admins manage).</p>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Results</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Marks published by your school (same records admins manage).
+          </p>
+        </div>
+        <Badge variant="secondary" className="text-xs">
+          Live API
+        </Badge>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">

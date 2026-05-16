@@ -38,7 +38,7 @@ def seed_demo_users(db: Session) -> None:
 
 def seed_demo_lms_data(db) -> None:
     """Shared subjects, enrollments, and sample rows so Admin + Student UIs read the same DB."""
-    from datetime import date, time
+    from datetime import date, datetime, time
 
     from app.models.announcement import Announcement
     from app.models.assignment import Assignment
@@ -144,12 +144,34 @@ def seed_demo_lms_data(db) -> None:
     db.add(exam1)
     db.flush()
 
+    assign1 = Assignment(
+        subject_id=subj_math.id,
+        title="Chapter 3 problem set",
+        description="Complete exercises 1–12 from the textbook.",
+        due_date=date(2026, 6, 1),
+        created_by=adm_user.id if adm_user else None,
+    )
+    db.add(assign1)
+    db.flush()
+
+    from app.models.assignment_submission import AssignmentSubmission
+
+    db.add(
+        AssignmentSubmission(
+            assignment_id=assign1.id,
+            student_id=student.id,
+            status="graded",
+            submitted_at=datetime.utcnow(),
+            grade="A",
+            feedback="Well done — clear working shown for all problems.",
+        )
+    )
     db.add(
         Assignment(
-            subject_id=subj_math.id,
-            title="Chapter 3 problem set",
-            description="Complete exercises 1–12 from the textbook.",
-            due_date=date(2026, 6, 1),
+            subject_id=subj_eng.id,
+            title="Essay draft: persuasive writing",
+            description="Submit a 500-word draft on the topic assigned in class.",
+            due_date=date(2026, 6, 15),
             created_by=adm_user.id if adm_user else None,
         )
     )
